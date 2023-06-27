@@ -1,4 +1,6 @@
 *.pyc
+*.png
+*.numbers
 
 *.swp
 *.swo
