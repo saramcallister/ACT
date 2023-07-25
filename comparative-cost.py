@@ -24,7 +24,7 @@ CAPACITY = 2 # 2 tb
 
 DEVICE_WRITES = 3 * 3 * CAPACITY # per day times rated lifetime
 
-FIGSIZE = (8, 3)
+FIGSIZE = (8, 6)
 
 # TBPD = DEVICE_WRITES / LIFETIME #tb per day
 
@@ -33,11 +33,13 @@ def get_cost(capacity_tb, multiple=1):
     # r^2 = .9997
     return 163.99 * capacity_tb * multiple + 122.78
 
-def get_wr_cost(wr_mbs, flash_type, lifetime):
+def get_wr_cost(wr_mbs, flash_type, lifetime, limit_flash=True):
     wr_tbpd = wr_mbs * (60 * 60 * 24) / (1024 * 1024)
     tbpd = DEVICE_WRITES / lifetime
-    min_flash = max(wr_tbpd / (tbpd * flash_type[0]) * CAPACITY, CAPACITY)
-    return get_cost(min_flash) * flash_type[1], min_flash
+    min_flash = wr_tbpd / (tbpd * flash_type[0]) * CAPACITY
+    if limit_flash:
+        min_flash = max(min_flash, CAPACITY)
+    return get_cost(min_flash, flash_type[1]), min_flash
 
 def get_carbon(ssd_cap_gb, discount): # per year
     ssd = ssd_cap_gb * discount
@@ -59,7 +61,7 @@ def get_linestyle(label):
     else:
         return (0, (1, 10))
 
-def graph_wr_vs_costs(savename, lines):
+def graph_wr_vs_costs(savename, lines, sublines):
     matplotlib.rcParams.update({'font.size': 16})
     fig, ax = plt.subplots(figsize=FIGSIZE)
 
@@ -70,12 +72,22 @@ def graph_wr_vs_costs(savename, lines):
             label=f'{label} years',
             color=get_color(i),
         )
+        for j, subpoints in enumerate(sublines[label]):
+            ftype = list(FLASH_TYPES.keys())[j]
+            plt.plot(
+                list(WRITE_RATES),
+                subpoints,
+                # label=f"{label} - {ftype}",
+                color=get_color(i),
+                linestyle=get_linestyle(ftype),
+                alpha=.5,
+            )   
 
 
     plt.xlabel('Write Rate (MB/s)')
     plt.ylabel('Cost ($/year)')
     plt.xlim(0)
-    plt.ylim(0)
+    plt.ylim(0, 200)
     plt.legend()
     plt.grid()
     plt.tight_layout()
@@ -98,16 +110,16 @@ def graph_wr_vs_emissions(savename, lines, sublines):
             label=f'{label} years',
             color=get_color(i),
         )
-        # for j, subpoints in enumerate(sublines[label]):
-        #     ftype = list(FLASH_TYPES.keys())[j]
-        #     plt.plot(
-        #         list(WRITE_RATES),
-        #         subpoints,
-        #         label=f"{label} - {ftype}",
-        #         color=get_color(i),
-        #         linestyle=get_linestyle(ftype),
-        #         alpha=.5,
-        #     )   
+        for j, subpoints in enumerate(sublines[label]):
+            ftype = list(FLASH_TYPES.keys())[j]
+            plt.plot(
+                list(WRITE_RATES),
+                subpoints,
+                # label=f"{label} - {ftype}",
+                color=get_color(i),
+                linestyle=get_linestyle(ftype),
+                alpha=.5,
+            )   
 
 
 
@@ -121,11 +133,12 @@ def graph_wr_vs_emissions(savename, lines, sublines):
     plt.savefig(savename)
     print(f"Saved figure to {savename}")
 
-def main(savename):
+def main(savename, limit_flash):
     lifetimes = [3,5,7,10]
     emission_lines = {}
     emissions_sublines = {}
     cost_lines = {}
+    cost_sublines = {}
     for lifetime in lifetimes:
         cost_possibilities = []
         carbon_possibilites = []
@@ -133,14 +146,14 @@ def main(savename):
             costs = []
             emissions = []
             for wr in WRITE_RATES:
-                cost, cap = get_wr_cost(wr, flash_type, lifetime)
+                cost, cap = get_wr_cost(wr, flash_type, lifetime, limit_flash)
                 costs.append(cost / lifetime)
                 emissions.append(get_carbon(cap * 1024, flash_type[1]) / lifetime)
             cost_possibilities.append(costs)
             carbon_possibilites.append(emissions)
         min_costs = [min([el[i] for el in cost_possibilities]) for i in range(len(WRITE_RATES))]
         min_emissions = [min([el[i] for el in carbon_possibilites]) for i in range(len(WRITE_RATES))]
-        argmin = [numpy.argmin([el[i] for el in carbon_possibilites]) for i in range(len(WRITE_RATES))]
+        argmin = [numpy.argmin([el[i] for el in cost_possibilities]) for i in range(len(WRITE_RATES))]
         seen = set()
         writes = list(WRITE_RATES)
         for i, val in enumerate(argmin[::-1]):
@@ -149,14 +162,16 @@ def main(savename):
                 seen.add(val)
 
         cost_lines[lifetime] = min_costs
+        cost_sublines[lifetime] = cost_possibilities
         emission_lines[lifetime] = min_emissions
         emissions_sublines[lifetime] = carbon_possibilites
-    graph_wr_vs_costs(f"{savename}-costs.pdf", cost_lines)
+    graph_wr_vs_costs(f"{savename}-costs.pdf", cost_lines, cost_sublines)
     graph_wr_vs_emissions(f"{savename}-emissions.pdf", emission_lines, emissions_sublines)
     
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('savename')
+    parser.add_argument('--limit_flash', '-l', action='store_true') # limit curves by capacity
     args = parser.parse_args()
-    main(args.savename)
+    main(args.savename, args.limit_flash)
