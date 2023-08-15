@@ -21,10 +21,13 @@ FLASH_TYPES = {
 
 WRITE_RATES = range(1, 100, 1) # in mb/s
 CAPACITY = 2 # 2 tb
+WRITE_RATES_DWPD = [(wr * 86400) / (CAPACITY * 1024 * 1024) for wr in WRITE_RATES]
 
 DEVICE_WRITES = 3 * 3 * CAPACITY # per day times rated lifetime
 
-FIGSIZE = (8, 6)
+FIGSIZE = (4.5,3.5)
+
+# FIGSIZE = (10, 4) # for legend
 
 # TBPD = DEVICE_WRITES / LIFETIME #tb per day
 
@@ -43,8 +46,8 @@ def get_wr_cost(wr_mbs, flash_type, lifetime, limit_flash=True):
 
 def get_carbon(ssd_cap_gb, discount): # per year
     ssd = ssd_cap_gb * discount
-    e_total = sum(get_embodied_carbon(0, ssd))
-    o_total = sum(get_operational_carbon(0, ssd)["wind-solar"]) # per year
+    e_total = get_embodied_carbon(0, ssd)[0]
+    o_total = get_operational_carbon(0, ssd)["wind-solar"][0] # per year
     return e_total + o_total
 
 COLORS = ["r", "b", "g", "c", "m", "y", "k", "tab:orange", "tab:blue"]
@@ -67,28 +70,29 @@ def graph_wr_vs_costs(savename, lines, sublines):
 
     for i, (label, points) in enumerate(lines.items()):
         plt.plot(
-            list(WRITE_RATES),
-            points,
-            label=f'{label} years',
+            list(WRITE_RATES_DWPD),
+            [p/CAPACITY for p in points],
+            # label=f'{label} years',
             color=get_color(i),
         )
-        for j, subpoints in enumerate(sublines[label]):
-            ftype = list(FLASH_TYPES.keys())[j]
-            plt.plot(
-                list(WRITE_RATES),
-                subpoints,
-                # label=f"{label} - {ftype}",
-                color=get_color(i),
-                linestyle=get_linestyle(ftype),
-                alpha=.5,
-            )   
+        # for j, subpoints in enumerate(sublines[label]):
+        #     ftype = list(FLASH_TYPES.keys())[j]
+        #     plt.plot(
+        #         list(WRITE_RATES),
+        #         subpoints,
+        #         # label=f"{label} - {ftype}",
+        #         color=get_color(i),
+        #         linestyle=get_linestyle(ftype),
+        #         alpha=.5,
+        #     )   
 
 
-    plt.xlabel('Write Rate (MB/s)')
-    plt.ylabel('Cost ($/year)')
+    plt.xlabel('Write Rate (DWPD)')
+    plt.ylabel('Cost ($/TB-year)')
     plt.xlim(0)
-    plt.ylim(0, 200)
-    plt.legend()
+    plt.ylim(0, 100)
+    # plt.legend(loc='upper center', bbox_to_anchor=(0.5, -0.5),
+    #       fancybox=True, shadow=True, ncol=5)
     plt.grid()
     plt.tight_layout()
     plt.savefig(savename)
@@ -105,29 +109,29 @@ def graph_wr_vs_emissions(savename, lines, sublines):
 
     for i, (label, points) in enumerate(lines.items()):
         plt.plot(
-            list(WRITE_RATES),
-            points,
+            list(WRITE_RATES_DWPD),
+            [p/CAPACITY for p in points],
             label=f'{label} years',
             color=get_color(i),
         )
-        for j, subpoints in enumerate(sublines[label]):
-            ftype = list(FLASH_TYPES.keys())[j]
-            plt.plot(
-                list(WRITE_RATES),
-                subpoints,
-                # label=f"{label} - {ftype}",
-                color=get_color(i),
-                linestyle=get_linestyle(ftype),
-                alpha=.5,
-            )   
+        # for j, subpoints in enumerate(sublines[label]):
+        #     ftype = list(FLASH_TYPES.keys())[j]
+        #     plt.plot(
+        #         list(WRITE_RATES_DWPD),
+        #         subpoints,
+        #         # label=f"{label} - {ftype}",
+        #         color=get_color(i),
+        #         linestyle=get_linestyle(ftype),
+        #         alpha=.5,
+        #     )   
 
 
 
-    plt.xlabel('Write Rate (MB/s)')
-    plt.ylabel('Carbon Emissions \n($CO_{2}$ kg/year)')
+    plt.xlabel('Write Rate (DWPD)')
+    plt.ylabel('Carbon Emissions \n($CO_{2}$ kg/TB-year)')
     plt.xlim(0)#, WRITE_RATES[-1] + 20)
-    plt.ylim(0, 35)
-    plt.legend()
+    plt.ylim(0, 12)
+    # plt.legend()
     plt.grid()
     plt.tight_layout()
     plt.savefig(savename)
@@ -158,7 +162,7 @@ def main(savename, limit_flash):
         writes = list(WRITE_RATES)
         for i, val in enumerate(argmin[::-1]):
             if val not in seen:
-                print(f"Lifetime {lifetime}:", val, writes[len(writes) - i - 1])
+                print(f"Lifetime {lifetime}:", val, WRITE_RATES_DWPD[len(writes) - i - 1])
                 seen.add(val)
 
         cost_lines[lifetime] = min_costs
