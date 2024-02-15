@@ -162,7 +162,7 @@ def main(savename, limit_flash):
         writes = list(WRITE_RATES)
         for i, val in enumerate(argmin[::-1]):
             if val not in seen:
-                print(f"Lifetime {lifetime}:", val, WRITE_RATES_DWPD[len(writes) - i - 1])
+                print(f"Lifetime {lifetime}:", list(FLASH_TYPES.keys())[val], val, WRITE_RATES_DWPD[len(writes) - i - 1])
                 seen.add(val)
 
         cost_lines[lifetime] = min_costs
